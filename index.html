@@ -128,7 +128,7 @@
   const authStatusEl = document.getElementById("authStatus");
   let auth = null;
   try {
-    auth = firebase.auth();(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
     auth = firebase.auth();
     auth.onAuthStateChanged(async (user) => {
       authStatusEl.textContent = user
