@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบ Firebase</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<style>
+body{font-family:Arial,sans-serif;background:#edf3ff;padding:20px;text-align:center}
+main{max-width:440px;margin:auto;background:white;padding:24px;border-radius:16px}
+button{padding:14px;margin:8px;width:90%;border:0;border-radius:10px;background:#2858b8;color:white;font-size:16px}
+button:disabled{opacity:.5}
+#result{overflow-wrap:anywhere;line-height:1.7}
+</style>
+</head>
+<body>
+<main>
+<h2>ทดสอบบันทึกคะแนน Firebase</h2>
+<p id="loginStatus">กำลังตรวจสอบบัญชี...</p>
+<button id="loginBtn" onclick="signIn()" disabled>เข้าสู่ระบบ Google</button>
+<button id="testBtn" onclick="saveTest()" disabled>ทดลองบันทึก 8 คะแนน</button>
+<p id="result">ยังไม่ได้ทดสอบ</p>
+<p>ใช้รหัสทดสอบเท่านั้น ไม่บันทึกลง Google Sheets</p>
+</main>
+<script>
+const firebaseConfig={
+apiKey:"AIzaSyC-nLAnCgPjVq6pvcwttiiaAcd126jRHfo",
+authDomain:"qr-smart-score-p61.firebaseapp.com",
+projectId:"qr-smart-score-p61",
+storageBucket:"qr-smart-score-p61.firebasestorage.app",
+messagingSenderId:"592432842398",
+appId:"1:592432842398:web:5d61627351171858b65d8f",
+measurementId:"G-G8XEL3HS3E"
+};
+firebase.initializeApp(firebaseConfig);
+const auth=firebase.auth();
+const db=firebase.firestore();
+const teacherUid="a0VN1nLcX9SOwYoIaNmwfPqzbPu2";
+const loginBtn=document.getElementById("loginBtn");
+const testBtn=document.getElementById("testBtn");
+const result=document.getElementById("result");
+auth.onAuthStateChanged(user=>{
+document.getElementById("loginStatus").textContent=user?"เข้าสู่ระบบ: "+user.email:"ยังไม่ได้เข้าสู่ระบบ";
+loginBtn.hidden=!!user;
+loginBtn.disabled=false;
+testBtn.disabled=!user||user.uid!==teacherUid;
+if(user&&user.uid!==teacherUid)result.textContent="บัญชีนี้ไม่มีสิทธิ์ทดสอบ";
+});
+async function signIn(){
+try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}
+catch(e){result.textContent="เข้าสู่ระบบไม่สำเร็จ: "+e.message;}
+}
+async function saveTest(){
+testBtn.disabled=true;
+result.textContent="กำลังบันทึกคะแนนทดลอง...";
+try{
+const ref=await db.collection("scoreTests").add({
+studentCode:"APS-P61-001",
+score:8,
+createdAt:firebase.firestore.FieldValue.serverTimestamp()
+});
+result.textContent="บันทึกสำเร็จ! รหัสรายการ: "+ref.id;
+}catch(e){
+result.textContent="บันทึกไม่สำเร็จ: "+e.code+" "+e.message;
+}
+finally{testBtn.disabled=false;}
+}
+</script>
+</body>
+</html>
