@@ -6,32 +6,225 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1">
   <title>QR Smart Score ป.6/1</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
+      margin: 0;
+      padding: 16px;
       font-family: Arial, sans-serif;
-      background: #eef3ff;
-      text-align: center;
-      padding: 24px;
+      background: #edf3ff;
+      color: #24354d;
     }
     .card {
-      max-width: 420px;
-      margin: 30px auto;
+      max-width: 480px;
+      margin: 15px auto;
       background: white;
-      padding: 25px;
       border-radius: 18px;
-      box-shadow: 0 3px 12px #ddd;
+      padding: 20px;
+      box-shadow: 0 3px 12px #dce4f0;
     }
-    h1 { color: #2855a4; }
-    p { line-height: 1.7; }
+    h1 {
+      color: #2656a5;
+      text-align: center;
+      margin-bottom: 5px;
+    }
+    h3, .subtitle { text-align: center; }
+    .subtitle { color: #64748b; }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin: 5px 0;
+    }
+    #start { background: #2858b8; color: white; }
+    #stop { background: #e6eaf0; color: #253449; }
+    button:disabled { opacity: .55; }
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+    .result {
+      padding: 14px;
+      margin-top: 12px;
+      background: #f1f5fb;
+      border-radius: 10px;
+      line-height: 1.8;
+      overflow-wrap: anywhere;
+    }
+    #status {
+      text-align: center;
+      font-weight: bold;
+      color: #24549a;
+    }
+    .notice { color: #9a6200; font-size: 14px; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>QR Smart Score</h1>
-    <h2>ชั้น ป.6/1</h2>
-    <p>ระบบบันทึกคะแนนด้วย QR Code</p>
-    <p>สร้างหน้าเว็บไซต์สำเร็จแล้ว</p>
-    <p>ขั้นตอนต่อไป: ติดตั้งระบบสแกน</p>
+    <p class="subtitle">ชั้นประถมศึกษาปีที่ 6/1</p>
+    <h3>ระบบสแกน QR Code บันทึกคะแนน</h3>
+
+    <p id="status">พร้อมเปิดกล้อง</p>
+
+    <button id="start" onclick="startCamera()">
+      เปิดกล้องสแกน QR Code
+    </button>
+    <button id="stop" onclick="stopCamera()" disabled>
+      ปิดกล้อง
+    </button>
+
+    <div id="reader"></div>
+
+    <div class="result">
+      <strong>รหัสนักเรียน:</strong>
+      <span id="student">ยังไม่ได้สแกน</span>
+      <br>
+      <strong>คะแนน:</strong>
+      <span id="score">ยังไม่ได้สแกน</span>
+    </div>
+
+    <p class="notice">
+      โหมดทดสอบ: ยังไม่มีการบันทึกลง Google Sheets
+    </p>
   </div>
+
+<script>
+  let scanner = null;
+  let running = false;
+  let busy = false;
+  let studentCode = "";
+  let lastText = "";
+  let lastTime = 0;
+
+  const statusEl = document.getElementById("status");
+  const studentEl = document.getElementById("student");
+  const scoreEl = document.getElementById("score");
+  const startBtn = document.getElementById("start");
+  const stopBtn = document.getElementById("stop");
+
+  function showStatus(message) {
+    statusEl.textContent = message;
+  }
+
+  async function startCamera() {
+    if (running) return;
+
+    if (!window.Html5Qrcode) {
+      showStatus("โหลดระบบสแกนไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต");
+      return;
+    }
+
+    startBtn.disabled = true;
+    showStatus("กำลังเปิดกล้อง...");
+
+    try {
+      if (!scanner) {
+        scanner = new Html5Qrcode("reader");
+      }
+
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: function(w, h) {
+            const size = Math.min(230, w, h);
+            return { width: size, height: size };
+          }
+        },
+        onScanSuccess,
+        () => {}
+      );
+
+      running = true;
+      stopBtn.disabled = false;
+      showStatus("สแกน QR Code นักเรียน");
+    } catch (error) {
+      startBtn.disabled = false;
+      showStatus("เปิดกล้องไม่ได้: " + error);
+    }
+  }
+
+  function onScanSuccess(decodedText) {
+    if (busy) return;
+
+    const text = decodedText.trim();
+    const now = Date.now();
+
+    if (text === lastText && now - lastTime < 2500) {
+      return;
+    }
+
+    lastText = text;
+    lastTime = now;
+
+    if (!studentCode) {
+      if (!/^APS-P61-\d{3}$/.test(text)) {
+        showStatus("กรุณาสแกน QR Code นักเรียน ป.6/1");
+        return;
+      }
+
+      const number = Number(text.slice(-3));
+      if (number < 1 || number > 40) {
+        showStatus("รหัสนักเรียนอยู่นอกช่วง 1–40");
+        return;
+      }
+
+      studentCode = text;
+      studentEl.textContent = studentCode;
+      scoreEl.textContent = "รอสแกนคะแนน";
+      showStatus("พบรหัสนักเรียนแล้ว กรุณาสแกนคะแนน");
+      return;
+    }
+
+    const match = /^SCORE:(10|[0-9])$/.exec(text);
+
+    if (!match) {
+      showStatus("กรุณาสแกน QR Code คะแนน 0–10");
+      return;
+    }
+
+    busy = true;
+    const score = Number(match[1]);
+
+    scoreEl.textContent = score + " คะแนน";
+    showStatus("ทดสอบสำเร็จ! ยังไม่ได้บันทึกคะแนน");
+
+    if (navigator.vibrate) navigator.vibrate(150);
+
+    setTimeout(() => {
+      studentCode = "";
+      studentEl.textContent = "ยังไม่ได้สแกน";
+      scoreEl.textContent = "ยังไม่ได้สแกน";
+      lastText = "";
+      lastTime = 0;
+      busy = false;
+      showStatus("พร้อมสแกนนักเรียนคนต่อไป");
+    }, 3500);
+  }
+
+  async function stopCamera() {
+    if (!scanner || !running) return;
+
+    stopBtn.disabled = true;
+
+    try {
+      await scanner.stop();
+      running = false;
+      startBtn.disabled = false;
+      showStatus("ปิดกล้องแล้ว");
+    } catch (error) {
+      showStatus("ปิดกล้องไม่สำเร็จ: " + error);
+      stopBtn.disabled = false;
+    }
+  }
+</script>
 </body>
 </html>
