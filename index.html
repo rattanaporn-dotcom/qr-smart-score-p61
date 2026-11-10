@@ -7,6 +7,8 @@
         content="width=device-width, initial-scale=1">
   <title>QR Smart Score ป.6/1</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -41,6 +43,9 @@
       width: 100%;
       margin: 5px 0;
     }
+    #login { background: #1769aa; color: white; }
+    #logout { background: #e6eaf0; color: #253449; }
+    #authStatus { font-size: 14px; text-align: center; color: #42526b; }
     #start { background: #2858b8; color: white; }
     #stop { background: #e6eaf0; color: #253449; }
     button:disabled { opacity: .55; }
@@ -72,9 +77,12 @@
     <p class="subtitle">ชั้นประถมศึกษาปีที่ 6/1</p>
     <h3>ระบบสแกน QR Code บันทึกคะแนน</h3>
 
-    <p id="status">พร้อมเปิดกล้อง</p>
+    <p id="authStatus">กำลังตรวจสอบการเข้าสู่ระบบ...</p>
+    <button id="login" onclick="loginGoogle()" disabled>เข้าสู่ระบบด้วย Google</button>
+    <button id="logout" onclick="logoutGoogle()" hidden>ออกจากระบบ</button>
+    <p id="status">กรุณาเข้าสู่ระบบก่อนเปิดกล้อง</p>
 
-    <button id="start" onclick="startCamera()">
+    <button id="start" onclick="startCamera()" disabled>
       เปิดกล้องสแกน QR Code
     </button>
     <button id="stop" onclick="stopCamera()" disabled>
@@ -92,7 +100,7 @@
     </div>
 
     <p class="notice">
-      โหมดทดสอบ: ยังไม่มีการบันทึกลง Google Sheets
+      โหมดทดสอบ: การเข้าสู่ระบบยังไม่ใช่การอนุญาตให้บันทึกคะแนน และยังไม่มีการบันทึกลง Google Sheets
     </p>
   </div>
 
@@ -103,6 +111,58 @@
   let studentCode = "";
   let lastText = "";
   let lastTime = 0;
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC-nLAnCgPjVq6pvcwttiiaAcd126jRHfo",
+    authDomain: "qr-smart-score-p61.firebaseapp.com",
+    projectId: "qr-smart-score-p61",
+    storageBucket: "qr-smart-score-p61.firebasestorage.app",
+    messagingSenderId: "592432842398",
+    appId: "1:592432842398:web:5d61627351171858b65d8f",
+    measurementId: "G-G8XEL3HS3E"
+  };
+
+  const loginBtn = document.getElementById("login");
+  const logoutBtn = document.getElementById("logout");
+  const authStatusEl = document.getElementById("authStatus");
+  let auth = null;
+  try {
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    auth.onAuthStateChanged(async (user) => {
+      authStatusEl.textContent = user
+        ? "เข้าสู่ระบบแล้ว: " + (user.email || "บัญชี Google")
+        : "ยังไม่ได้เข้าสู่ระบบ";
+      loginBtn.hidden = !!user;
+      logoutBtn.hidden = !user;
+      loginBtn.disabled = false;
+      if (!user && running) await stopCamera();
+      startBtn.disabled = !user || running;
+      if (!user) showStatus("กรุณาเข้าสู่ระบบก่อนเปิดกล้อง");
+      else if (!running) showStatus("พร้อมเปิดกล้อง (โหมดทดสอบ)");
+    });
+  } catch (err) {
+    authStatusEl.textContent = "โหลด Firebase ไม่สำเร็จ: " + err.message;
+  }
+
+  async function loginGoogle() {
+    if (!auth) return;
+    loginBtn.disabled = true;
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      await auth.signInWithPopup(provider);
+    } catch (err) {
+      authStatusEl.textContent = "เข้าสู่ระบบไม่สำเร็จ: " + (err.code || err.message);
+      loginBtn.disabled = false;
+    }
+  }
+
+  async function logoutGoogle() {
+    if (!auth) return;
+    if (running) await stopCamera();
+    await auth.signOut();
+  }
 
   const statusEl = document.getElementById("status");
   const studentEl = document.getElementById("student");
@@ -116,6 +176,10 @@
 
   async function startCamera() {
     if (running) return;
+    if (!auth || !auth.currentUser) {
+      showStatus("กรุณาเข้าสู่ระบบก่อนเปิดกล้อง");
+      return;
+    }
 
     if (!window.Html5Qrcode) {
       showStatus("โหลดระบบสแกนไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต");
@@ -147,7 +211,7 @@
       stopBtn.disabled = false;
       showStatus("สแกน QR Code นักเรียน");
     } catch (error) {
-      startBtn.disabled = false;
+      startBtn.disabled = !auth || !auth.currentUser;
       showStatus("เปิดกล้องไม่ได้: " + error);
     }
   }
@@ -218,7 +282,7 @@
     try {
       await scanner.stop();
       running = false;
-      startBtn.disabled = false;
+      startBtn.disabled = !auth || !auth.currentUser;
       showStatus("ปิดกล้องแล้ว");
     } catch (error) {
       showStatus("ปิดกล้องไม่สำเร็จ: " + error);
