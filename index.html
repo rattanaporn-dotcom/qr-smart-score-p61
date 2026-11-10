@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -127,7 +128,7 @@
   const authStatusEl = document.getElementById("authStatus");
   let auth = null;
   try {
-    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();(firebaseConfig);
     auth = firebase.auth();
     auth.onAuthStateChanged(async (user) => {
       authStatusEl.textContent = user
