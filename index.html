@@ -152,7 +152,7 @@ firebase.initializeApp(firebaseConfig);
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
       
-provider.addScope("https://www.googleapis.com/auth/spreadsheets");
+provider.addScope("https://www.googleapis.com/auth/drive.file");
 
       provider.setCustomParameters({ prompt: "select_account" });
       await auth.signInWithPopup(provider);
